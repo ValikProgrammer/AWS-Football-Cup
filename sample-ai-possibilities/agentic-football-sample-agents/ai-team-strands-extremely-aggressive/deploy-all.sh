@@ -9,6 +9,7 @@ set -e
 #   AWS_PROFILE=your-profile ./deploy-all.sh          # deploy all
 #   AWS_PROFILE=your-profile ./deploy-all.sh ai-gk    # deploy one agent
 #   DEPLOY_PARALLEL=0 ./deploy-all.sh                 # old one-by-one mode
+#   RESTART_SESSIONS=0 ./deploy-all.sh                # do not stop old scrimmage sessions
 #
 # How it works:
 #   1. Creates a _build/<agent>/ staging directory for each agent
@@ -166,6 +167,18 @@ echo ""
 if [ ${#FAILED[@]} -gt 0 ]; then
   echo "Some agents failed to deploy. Check the output above."
   exit 1
+fi
+
+# Running sessions keep old code: stop scrimmage sessions so the next call loads this version.
+RESTART="$SCRIPT_DIR/../../../scripts/restart_sessions.sh"
+if [ "${RESTART_SESSIONS:-1}" = "1" ] && [ -x "$RESTART" ] && [ ${#DEPLOYED[@]} -gt 0 ]; then
+  NAMES=()
+  for agent in "${DEPLOYED[@]}"; do
+    NAMES+=("$(sed -n 's/^default_agent: *//p' "$SCRIPT_DIR/$agent/.bedrock_agentcore.yaml.template")")
+  done
+  echo "Restarting scrimmage sessions: ${NAMES[*]}"
+  "$RESTART" "${NAMES[@]}" || echo "  (session restart failed; run scripts/restart_sessions.sh by hand)"
+  echo ""
 fi
 
 echo "All agents deployed successfully."
