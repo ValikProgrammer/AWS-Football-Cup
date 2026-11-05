@@ -158,6 +158,9 @@ def _shot_aim(me, gk, block: float) -> str:
     Then the bottom corner on the far side from the GK. +y is the
     attacker's left: GK on the +y side of the line -> "BR".
     """
+    # Always CENTER: in live data corners missed wide into the end wall
+    # (peer runbook, 53 shots: CENTER 7/36 goals, BR 1/13, BL 0/4).
+    return "CENTER"
     if gk is None:
         return "CENTER"
     goal = (1.0, 0.0)
@@ -194,7 +197,10 @@ def _on_ball(c) -> list[Candidate]:
     dg = dist(me, goal)
     ghw = p.get("goal_hw", 0.155)
     angle = shot_angle_deg(me, ghw)
-    angle_ok = angle >= p.get("min_shot_angle_deg", 12.0)
+    angle_ok = angle >= p.get("min_shot_angle_deg", 20.0)
+    # Beside the post, close to the goal line: the ball only rolls across the mouth.
+    if abs(me[1]) > ghw * p.get("wide_post_mult", 1.5) and (1.0 - me[0]) < p.get("wide_line_dist", 0.17):
+        angle_ok = False
     power = 0.75 if dg < 0.25 else (0.85 if dg < 0.5 else 0.95)   # 1.0 flies over the bar (peer runbook)
 
     # OPEN GOAL (hard rule): nobody, GK included, on the line to the goal centre

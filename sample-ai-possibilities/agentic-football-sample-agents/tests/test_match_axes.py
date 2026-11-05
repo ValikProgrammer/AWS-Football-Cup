@@ -231,14 +231,12 @@ def test_far_central_gk_off_line_no_shot():
     assert not _shots(_decide(_shot_state((1.4, 0.0), (3.5, -2.8))))
 
 
-def test_gk_on_centre_line_aims_bottom_corner_away():
+def test_gk_on_centre_line_still_aims_center():
     me = (3.8, 0.5)
-    # GK just on the -y side (attacker's right) of the shooter-goal line -> BL
-    s = _shots(_decide(_shot_state(me, (5.76, 0.0))))
-    assert s and s[0].command["parameters"]["aim_location"] == "BL", [c.reason for c in s]
-    # GK just on the +y side (attacker's left) -> BR
-    s = _shots(_decide(_shot_state(me, (5.76, 0.29))))
-    assert s and s[0].command["parameters"]["aim_location"] == "BR", [c.reason for c in s]
+    # corners went wide into the end wall in live matches: always CENTER
+    for gk in ((5.76, 0.0), (5.76, 0.29)):
+        s = _shots(_decide(_shot_state(me, gk)))
+        assert all(c.command["parameters"]["aim_location"] == "CENTER" for c in s), [c.reason for c in s]
 
 
 def test_gk_aside_aims_center():
