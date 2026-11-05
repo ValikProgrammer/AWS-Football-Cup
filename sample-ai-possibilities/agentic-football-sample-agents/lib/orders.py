@@ -136,6 +136,8 @@ class OrderTracker:
     update() returns the active action word, else the sticky strategy word.
     """
     ORDER_SECONDS = 2.5   # about one decision (~2 s apart)
+    HOLD_UNTIL_DONE = {"shoot": ("SHOOT",), "pass": ("PASS", "GK_DISTRIBUTE")}
+    HOLD_SECONDS = 6.0    # shoot / pass wait for our next ball carrier, at most this long
 
     def __init__(self):
         self.seen = 0
@@ -167,11 +169,16 @@ class OrderTracker:
                 self.strategy_word = o
             elif o:
                 self.action = o
-                self.action_until = now + self.ORDER_SECONDS
+                self.action_until = now + (self.HOLD_SECONDS if o in self.HOLD_UNTIL_DONE else self.ORDER_SECONDS)
         self.seen = len(texts)
         if self.action and now > self.action_until:
             self.action = None
         return self.action or self.strategy_word
+
+    def consume(self, command_type) -> None:
+        """Clear a shoot/pass order once this agent has carried it out."""
+        if command_type in self.HOLD_UNTIL_DONE.get(self.action, ()):
+            self.action = None
 
 
 TRACKER = OrderTracker()

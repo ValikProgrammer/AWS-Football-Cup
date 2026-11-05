@@ -23,6 +23,7 @@ class Candidate:
     command: dict
     score: float
     reason: str
+    engine_ok: bool = False   # nothing specific needed: the engine's own AI may take this decision
 
 
 def load_params(path: str | None = None) -> dict:
@@ -56,9 +57,11 @@ def _apply_context(p: dict, gs: dict, team_id: int, order: str | None) -> dict:
     p["early"] = t < p["early_time_s"]
     p["no_fwd_sprint"] = False
     p["use_mark"] = False
+    p["force_shoot"] = p["force_pass"] = False
     if order == "shoot":
         p["shot_bonus"] += 0.2
         p["shoot_range"] += 0.15
+        p["force_shoot"] = True      # coach C1: carrier in their half shoots at once
     elif order == "attack":
         p["line_height"] += 0.15
         p["forward_pass_weight"] += 0.15
@@ -71,6 +74,7 @@ def _apply_context(p: dict, gs: dict, team_id: int, order: str | None) -> dict:
         p["use_mark"] = True
     elif order == "pass":
         p["pass_bonus"] += 0.15
+        p["force_pass"] = True       # coach C6: carrier passes on this decision
     elif order == "tackle":          # C7: win the ball back now
         p["tackle_dist"] = max(p.get("tackle_dist", -1), 0.08)
         p["press_bodies"] = 2
@@ -199,6 +203,12 @@ def _on_ball(c) -> list[Candidate]:
     if me[0] >= p.get("open_goal_min_x", 0.0) and corr_all >= p["shot_corridor"] and angle_ok:
         return [Candidate(_cmd("SHOOT", pid, tid, {"aim_location": "CENTER", "power": power}),
                           2.0, f"open goal d={dg:.2f} corr_all={corr_all:.2f} ang={angle:.0f}")]
+
+    # COACH SHOOT (C1): first carrier in the opponent half shoots now (centre, angle limit kept).
+    if p.get("force_shoot") and me[0] > 0 and angle_ok:
+        aim = _shot_aim(me, c["opp_gk"], ghw * p.get("gk_block_frac", 0.35))
+        return [Candidate(_cmd("SHOOT", pid, tid, {"aim_location": aim, "power": power}),
+                          2.0, f"coach shoot {aim} d={dg:.2f} ang={angle:.0f}")]
     blockers = [o for o in opps if o is not c["opp_gk"]]
     corr = corridor(me, goal, blockers)
     gk = c["opp_gk"]
@@ -251,6 +261,17 @@ def _on_ball(c) -> list[Candidate]:
         if fwd:
             out.append(Candidate(_cmd("PASS", pid, tid, {"target_player_id": fwd[0], "type": "AERIAL"}),
                                  0.6, f"clearance to {fwd[0]} pressure={pressure:.2f}"))
+    if p.get("force_pass"):           # coach C6: the best pass wins this decision
+        for x in out:
+            if x.command["commandType"] == "PASS":
+                x.score += 1.0
+                x.reason = "coach " + x.reason
+    # Dribble in the final third: the engine AI decides continuously and shoots
+    # the moment the goal opens, while our decisions come only every ~2 s.
+    if me[0] > p.get("engine_dribble_min_x", 0.5):
+        for x in out:
+            if x.reason.startswith("dribble"):
+                x.engine_ok = True
     return out
 
 
@@ -271,7 +292,10 @@ def _shape(c, score, why, cap_def=True) -> Candidate:
     ty = _clamp(ay * fr.half_w / 0.64 + 0.3 * b[1], -fr.half_w * 0.9, fr.half_w * 0.9)
     spr = c["sprint"] and dist(me, (tx, ty)) > 0.4
     rx, ry = fr.to_raw(tx, ty)
-    return Candidate(_cmd("MOVE_TO", pid, tid, {"target_x": rx, "target_y": ry, "sprint": spr}), score, why)
+    # A plain formation move needs no override, except DEF under the own-half cap.
+    engine_ok = not (c["role"] == "DEF" and cap_def)
+    return Candidate(_cmd("MOVE_TO", pid, tid, {"target_x": rx, "target_y": ry, "sprint": spr}), score, why,
+                     engine_ok)
 
 
 def _attack_off_ball(c, holder_pid) -> list[Candidate]:

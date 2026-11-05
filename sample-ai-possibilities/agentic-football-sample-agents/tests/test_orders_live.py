@@ -29,10 +29,28 @@ def at(rows, t):
     return min(rows, key=lambda r: abs(r[0] - t))
 
 
-def test_action_order_lasts_about_one_decision():
+def test_shoot_waits_for_carrier_at_most_6s():
     rows = _replay(CHAT)
     assert at(rows, 74)[1] == "shoot"            # next decision after the message
-    assert at(rows, 82)[1] is None               # short: ~2.5 s of game time
+    assert at(rows, 80)[1] == "shoot"            # still waiting for a ball carrier
+    assert at(rows, 86)[1] is None               # gone after ~6 s
+
+
+def test_other_action_words_are_short():
+    rows = _replay([(10.0, _msg("home", "press"))], until=20)
+    assert at(rows, 10)[1] == "press" and at(rows, 14)[1] is None
+
+
+def test_consume_clears_shoot_and_pass():
+    tr = orders.OrderTracker()
+    tr.update({"gameTime": 10.0, "teamChat": [_msg("home", "C1")]}, 0)
+    tr.consume("MOVE_TO")
+    assert tr.action == "shoot"
+    tr.consume("SHOOT")
+    assert tr.action is None
+    tr.update({"gameTime": 12.0, "teamChat": [_msg("home", "C1"), _msg("home", "C6")]}, 0)
+    tr.consume("GK_DISTRIBUTE")
+    assert tr.action is None
 
 
 def test_new_message_replaces_action():

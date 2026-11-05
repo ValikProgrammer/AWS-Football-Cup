@@ -54,18 +54,45 @@ def llm_enabled() -> bool:
         return False
 
 
+from collections import deque as _deque
+
+# Hybrid control: a decision where nothing specific is needed (Candidate.engine_ok)
+# goes to the engine's own AI (CLEAR_OVERRIDE), which reacts continuously while we
+# decide only every ~2 s. Share is capped per player so the scrimmage fitness check
+# (>50% active commands per role) still passes: engine share <= ENGINE_SHARE over
+# the last 10 decisions, counted from the first tick.
+ENGINE_SHARE = float(os.environ.get("ENGINE_SHARE", "0.4"))
+_ENGINE_RECENT = _deque(maxlen=10)
+
+
+def _pick_command(cands, label: str):
+    """(command, used_engine) for the top candidate."""
+    top = cands[0]
+    n_eng, n = sum(_ENGINE_RECENT), len(_ENGINE_RECENT)
+    use_engine = (bool(getattr(top, "engine_ok", False)) and label != "GK"
+                  and (n_eng + 1) / (n + 1) <= ENGINE_SHARE)
+    _ENGINE_RECENT.append(1 if use_engine else 0)
+    cmd = {"commandType": "CLEAR_OVERRIDE", "parameters": {}, "duration": 0} if use_engine else dict(top.command)
+    try:
+        _orders.TRACKER.consume(cmd.get("commandType"))
+    except Exception:
+        pass
+    return cmd, use_engine
+
+
 def policy_commands(game_state: dict, team_id: int, pid: int, label: str):
     """(commands, extra) from the deterministic policy. Raises on any failure."""
     if _policy is None or _POLICY_PARAMS is None:
         raise RuntimeError("policy unavailable")
     order = _orders.TRACKER.update(game_state, team_id, int(_POLICY_PARAMS.get("order_ticks", 20)))
     cands = _policy.decide(game_state, team_id, pid, label, _POLICY_PARAMS, order)
-    cmd = dict(cands[0].command)
+    cmd, engine = _pick_command(cands, label)
     cmd["teamId"] = team_id
     cmd["playerId"] = pid
     extra = {
         "order": order,
-        "reason": cands[0].reason,
+        "reason": ("engine: " if engine else "") + cands[0].reason,
+        "engine": engine,
         "top": [{"t": c.command.get("commandType"), "s": round(c.score, 3), "r": c.reason} for c in cands[:3]],
     }
     return [cmd], extra
@@ -110,14 +137,15 @@ def strategy_commands(game_state: dict, team_id: int, pid: int, label: str):
         src = "shared" if _shared.source() != "default" else "default"
     params = _strategies.apply(_POLICY_PARAMS, strategy)
     cands = _policy.decide(game_state, team_id, pid, label, params, order)
-    cmd = dict(cands[0].command)
+    cmd, engine = _pick_command(cands, label)
     cmd["teamId"] = team_id
     cmd["playerId"] = pid
     extra = {
         "order": order,
         "strategy": strategy,
         "strategy_source": src,
-        "reason": cands[0].reason,
+        "reason": ("engine: " if engine else "") + cands[0].reason,
+        "engine": engine,
         "top": [{"t": c.command.get("commandType"), "s": round(c.score, 3), "r": c.reason} for c in cands[:3]],
     }
     if label == "GK":
