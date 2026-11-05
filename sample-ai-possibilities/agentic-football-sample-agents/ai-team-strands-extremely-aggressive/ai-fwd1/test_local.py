@@ -43,6 +43,7 @@ def test_fallback_shoot():
     state = json.loads(json.dumps(GAME_STATE))
     state["ball"]["possessionAgentId"] = f"agentId_{MY_PLAYER_ID}"
     state["players"][3]["position"] = {"x": 40, "y": -5}  # near opp goal
+    state["ball"]["position"] = dict(state["players"][MY_PLAYER_ID]["position"])  # ball is at the holder
     cmds = fallback_commands(state, TEAM_ID, MY_PLAYER_ID)
     for c in cmds:
         print(f"  P{c['playerId']}: {c['commandType']} {c.get('parameters', {})}")

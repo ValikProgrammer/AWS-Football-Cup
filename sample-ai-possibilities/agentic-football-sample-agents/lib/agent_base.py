@@ -8,6 +8,16 @@ from strands.models import BedrockModel
 from parsing import parse_commands
 from state import summarize_state
 from fallback import FallbackConfig, build_last_resort
+from ticklog import log_tick, now_ms
+
+
+def _fresh_agent(agent: Agent) -> Agent:
+    """New Agent per tick on the same model: no history growth, no stdout token echo."""
+    try:
+        return Agent(model=agent.model, system_prompt=agent.system_prompt, callback_handler=None)
+    except Exception:
+        agent.messages.clear()
+        return agent
 
 
 def create_agent(system_prompt: str, model_id: str = "us.amazon.nova-micro-v1:0") -> Agent:
@@ -74,6 +84,7 @@ def create_invoke_handler(
     async def invoke(payload, context):
         # Parsed once, outside the try, so the error handler below can reuse
         # it instead of re-parsing and throwing a second exception.
+        t0 = now_ms()
         prompt_data = parse_prompt(payload)
         team_id = team_id_from(prompt_data, log, position_label)
         try:
@@ -88,7 +99,7 @@ def create_invoke_handler(
             )
             log.info(f"{position_label} agent invoked for team {team_id}, controlling player {effective_pid}")
 
-            response = agent(state_summary)
+            response = _fresh_agent(agent)(state_summary)
             response_text = str(response)
 
             def on_recovered(raw: str) -> None:
@@ -102,11 +113,14 @@ def create_invoke_handler(
             if commands:
                 log.info(f"LLM returned {len(commands)} commands: "
                          f"{[c.get('commandType') for c in commands]}")
+                log_tick(position_label, team_id, effective_pid, "llm", now_ms() - t0, commands, prompt_data)
                 yield json.dumps(commands)
             else:
                 log.warn(f"LLM parse failed, using fallback. Response: {response_text[:200]}")
                 commands = fallback_fn(game_state, team_id, effective_pid)
                 log.info(f"Fallback returned {len(commands)} commands")
+                log_tick(position_label, team_id, effective_pid, "fallback", now_ms() - t0, commands, prompt_data,
+                         error="parse_failed: " + response_text[:200])
                 yield json.dumps(commands)
 
         except Exception as e:
@@ -123,6 +137,8 @@ def create_invoke_handler(
                     team_id,
                     effective_pid,
                 )
+                log_tick(position_label, team_id, effective_pid, "fallback", now_ms() - t0, commands, prompt_data,
+                         error=repr(e))
                 yield json.dumps(commands)
             except Exception as fallback_error:
                 log.error(f"{position_label} fallback also failed: {fallback_error}")
@@ -130,6 +146,8 @@ def create_invoke_handler(
                 # team_id came from the payload at entry, so the last resort
                 # is no longer hardcoded to HOME.
                 cmd["teamId"] = team_id
+                log_tick(position_label, team_id, my_player_id, "last_resort", now_ms() - t0, [cmd], prompt_data,
+                         error=repr(fallback_error))
                 yield json.dumps([cmd])
 
     return invoke

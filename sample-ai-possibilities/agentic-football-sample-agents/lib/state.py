@@ -75,6 +75,12 @@ def _resolve_holder(ball: dict, players: list):
         if team is not None:
             matches = [p for p in matches if p.get("teamId") == team]
 
+    if len(matches) > 1:
+        # Same agentId_N exists in both teams. "First in list" is always the
+        # HOME player, so the AWAY side misread possession half the time.
+        # The holder is the candidate nearest to the ball.
+        bp = ball.get("position", {}) or {}
+        matches.sort(key=lambda p: dist(p.get("position", {}) or {}, bp))
     return matches[0] if matches else None
 
 

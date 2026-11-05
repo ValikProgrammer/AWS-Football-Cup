@@ -43,6 +43,7 @@ def test_fallback_with_ball_near_goal():
     state = json.loads(json.dumps(GAME_STATE))
     state["ball"]["possessionAgentId"] = f"agentId_{MY_PLAYER_ID}"
     state["players"][2]["position"] = {"x": 40, "y": -5}  # MID near opp goal
+    state["ball"]["position"] = dict(state["players"][MY_PLAYER_ID]["position"])  # ball is at the holder
     cmds = fallback_commands(state, TEAM_ID, MY_PLAYER_ID)
     for c in cmds:
         print(f"  P{c['playerId']}: {c['commandType']} {c.get('parameters', {})}")
@@ -57,6 +58,7 @@ def test_fallback_with_ball_far():
     state = json.loads(json.dumps(GAME_STATE))
     state["ball"]["possessionAgentId"] = f"agentId_{MY_PLAYER_ID}"
     state["players"][2]["position"] = {"x": 0, "y": -5}
+    state["ball"]["position"] = dict(state["players"][MY_PLAYER_ID]["position"])  # ball is at the holder
     cmds = fallback_commands(state, TEAM_ID, MY_PLAYER_ID)
     for c in cmds:
         print(f"  P{c['playerId']}: {c['commandType']} {c.get('parameters', {})}")

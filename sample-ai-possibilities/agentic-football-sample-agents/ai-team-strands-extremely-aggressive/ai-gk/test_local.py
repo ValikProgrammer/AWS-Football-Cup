@@ -41,6 +41,7 @@ def test_fallback_with_ball():
     print(f"=== FALLBACK WITH BALL ({POSITION_LABEL}) ===")
     state = json.loads(json.dumps(GAME_STATE))
     state["ball"]["possessionAgentId"] = f"agentId_{MY_PLAYER_ID}"
+    state["ball"]["position"] = dict(state["players"][MY_PLAYER_ID]["position"])  # ball is at the holder
     cmds = fallback_commands(state, TEAM_ID, MY_PLAYER_ID)
     for c in cmds:
         print(f"  P{c['playerId']}: {c['commandType']} {c.get('parameters', {})}")
