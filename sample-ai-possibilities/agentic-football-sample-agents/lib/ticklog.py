@@ -14,6 +14,15 @@ import time
 LOG_PAYLOAD = True
 
 
+import os as _os
+import uuid as _uuid
+
+# Process identity: tells whether one Python process serves the whole match
+# (module globals such as memory survive) or each call starts fresh.
+_PROC = {"proc_id": _uuid.uuid4().hex[:8], "os_pid": _os.getpid(), "started": round(time.time(), 1)}
+_CALLS = 0
+
+
 def now_ms() -> float:
     return time.perf_counter() * 1000.0
 
@@ -30,6 +39,8 @@ def log_tick(
     extra: dict | None = None,
 ) -> None:
     """Write one tick record. source is one of: policy, llm, fallback, last_resort."""
+    global _CALLS
+    _CALLS += 1
     try:
         gs = (prompt_data or {}).get("gameState", {}) if isinstance(prompt_data, dict) else {}
         rec = {
@@ -43,6 +54,9 @@ def log_tick(
             "play_mode": gs.get("playMode"),
             "source": source,
             "latency_ms": round(latency_ms, 1),
+            "proc": _PROC["proc_id"],
+            "os_pid": _PROC["os_pid"],
+            "proc_calls": _CALLS,
             "cmd": commands[0] if isinstance(commands, list) and commands else commands,
         }
         if error:
