@@ -65,3 +65,25 @@ def test_fitness_check_on_real_scrimmage_ticks():
             cmd, _ = agent_base._pick_command(policy.decide(pl["gameState"], pl["teamId"], pid, role, P), role)
             active += cmd["commandType"] not in ("CLEAR_OVERRIDE", "SET_STANCE", "RESET")
         assert active > 2.5, (role, active)
+
+
+def _dribble():
+    return [Candidate({"commandType": "MOVE_TO", "parameters": {"target_x": 1, "target_y": 1, "sprint": True}},
+                      0.3, "dribble fwd space=0.30", True)]
+
+
+def test_carrier_priority_still_passes_fitness_check():
+    agent_base._ENGINE_RECENT.clear()
+    first5 = [agent_base._pick_command(_dribble(), "FWD1")[1] for _ in range(5)]
+    assert sum(first5) <= 2
+    agent_base._ENGINE_RECENT.clear()
+    many = [agent_base._pick_command(_dribble(), "FWD1")[1] for _ in range(20)]
+    assert sum(many[-10:]) <= 5 and sum(many) / len(many) < 0.5
+
+
+def test_dribble_in_their_half_is_engine_ok():
+    gs = _state((22, 0), "agentId_3", {("home", "agentId_3"): (22, 0), ("away", "agentId_1"): (30, 0)})
+    norm.reset()
+    cands = policy.decide(gs, 0, 3, "FWD1", P)
+    drib = [c for c in cands if c.reason.startswith("dribble")]
+    assert drib and all(c.engine_ok for c in drib)        # x = 22/55 = 0.4 > 0.3

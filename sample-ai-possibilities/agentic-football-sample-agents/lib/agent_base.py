@@ -72,6 +72,7 @@ from collections import deque as _deque
 # (>50% active commands per role) still passes: engine share <= ENGINE_SHARE over
 # the last 10 decisions, counted from the first tick.
 ENGINE_SHARE = float(os.environ.get("ENGINE_SHARE", "0.4"))
+CARRIER_ENGINE_SHARE = float(os.environ.get("CARRIER_ENGINE_SHARE", "0.45"))   # still < 0.5
 _ENGINE_RECENT = _deque(maxlen=10)
 
 
@@ -79,8 +80,12 @@ def _pick_command(cands, label: str):
     """(command, used_engine) for the top candidate."""
     top = cands[0]
     n_eng, n = sum(_ENGINE_RECENT), len(_ENGINE_RECENT)
+    # The ball carrier near their goal gets priority: the engine AI shoots the
+    # moment a gap opens (live: 6 of 8 shots came from engine handoffs).
+    carrier = top.command.get("commandType") == "MOVE_TO" and top.reason.startswith("dribble")
+    cap = CARRIER_ENGINE_SHARE if carrier else ENGINE_SHARE
     use_engine = (bool(getattr(top, "engine_ok", False)) and label != "GK"
-                  and (n_eng + 1) / (n + 1) <= ENGINE_SHARE)
+                  and (n_eng + 1) / (n + 1) <= cap)
     _ENGINE_RECENT.append(1 if use_engine else 0)
     cmd = {"commandType": "CLEAR_OVERRIDE", "parameters": {}, "duration": 0} if use_engine else dict(top.command)
     try:
