@@ -8,12 +8,13 @@ set -e
 # Usage:
 #   AWS_PROFILE=your-profile ./deploy-all.sh          # deploy all
 #   AWS_PROFILE=your-profile ./deploy-all.sh ai-gk    # deploy one agent
+#   DEPLOY_PARALLEL=0 ./deploy-all.sh                 # old one-by-one mode
 #
 # How it works:
 #   1. Creates a _build/<agent>/ staging directory for each agent
 #   2. Copies the agent's src/ + shared lib/ + requirements.txt into it
 #   3. Generates .bedrock_agentcore.yaml from the agent's template
-#   4. Deploys from the staging directory
+#   4. Deploys all staging directories in parallel (one log per agent in _deploy_logs/)
 #   5. Cleans up _build/ when done
 # ============================================================================
 
@@ -66,7 +67,14 @@ echo "  AWS Account: $AWS_ACCOUNT_ID"
 echo "  AWS Region:  $AWS_DEFAULT_REGION"
 echo ""
 
+LOG_DIR="$SCRIPT_DIR/_deploy_logs"
+mkdir -p "$LOG_DIR"
+PARALLEL="${DEPLOY_PARALLEL:-1}"
+PIDS=()
+
 cleanup() {
+  # Stop running deploys on Ctrl+C / error, then remove staging dirs.
+  for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
   echo ""
   echo "Cleaning up build directory..."
   rm -rf "$BUILD_DIR"
@@ -75,14 +83,12 @@ trap cleanup EXIT
 
 DEPLOYED=()
 FAILED=()
+STAGED=()
 
+# --- 1. Stage every agent (fast, sequential) --------------------------------
 for agent in "${AGENTS[@]}"; do
   AGENT_SRC="$SCRIPT_DIR/$agent"
   STAGE="$BUILD_DIR/$agent"
-
-  echo "=========================================="
-  echo "  Deploying: $agent"
-  echo "=========================================="
 
   if [ ! -d "$AGENT_SRC" ]; then
     echo "  ERROR: Agent directory not found: $AGENT_SRC"
@@ -102,16 +108,49 @@ for agent in "${AGENTS[@]}"; do
     -e "s|\${AWS_DEFAULT_REGION}|$AWS_DEFAULT_REGION|g" \
     "$AGENT_SRC/.bedrock_agentcore.yaml.template" > "$STAGE/.bedrock_agentcore.yaml"
 
-  echo "  Deploying from: $STAGE"
-  if (cd "$STAGE" && agentcore deploy --auto-update-on-conflict); then
-    echo "  ✅ $agent: DEPLOYED"
-    DEPLOYED+=("$agent")
-  else
-    echo "  ❌ $agent: FAILED"
-    FAILED+=("$agent")
-  fi
-  echo ""
+  STAGED+=("$agent")
+  echo "  Staged: $agent"
 done
+echo ""
+
+deploy_one() {
+  (cd "$BUILD_DIR/$1" && agentcore deploy --auto-update-on-conflict) > "$LOG_DIR/$1.log" 2>&1
+}
+
+# --- 2. Deploy (parallel by default) ----------------------------------------
+START=$(date +%s)
+if [ "$PARALLEL" = "1" ] && [ ${#STAGED[@]} -gt 1 ]; then
+  echo "Deploying ${#STAGED[@]} agents in parallel (logs: $LOG_DIR/<agent>.log)..."
+  for agent in "${STAGED[@]}"; do
+    deploy_one "$agent" &
+    PIDS+=("$!")
+  done
+  for i in "${!STAGED[@]}"; do
+    agent="${STAGED[$i]}"
+    if wait "${PIDS[$i]}"; then
+      echo "  ✅ $agent: DEPLOYED ($(( $(date +%s) - START ))s)"
+      DEPLOYED+=("$agent")
+    else
+      echo "  ❌ $agent: FAILED — last lines of $LOG_DIR/$agent.log:"
+      tail -n 15 "$LOG_DIR/$agent.log" | sed 's/^/      /'
+      FAILED+=("$agent")
+    fi
+  done
+  PIDS=()
+else
+  for agent in "${STAGED[@]}"; do
+    echo "  Deploying: $agent (log: $LOG_DIR/$agent.log)"
+    if deploy_one "$agent"; then
+      echo "  ✅ $agent: DEPLOYED ($(( $(date +%s) - START ))s)"
+      DEPLOYED+=("$agent")
+    else
+      echo "  ❌ $agent: FAILED — last lines of $LOG_DIR/$agent.log:"
+      tail -n 15 "$LOG_DIR/$agent.log" | sed 's/^/      /'
+      FAILED+=("$agent")
+    fi
+  done
+fi
+echo ""
 
 echo "=========================================="
 echo "  Deployment Summary"
@@ -121,6 +160,7 @@ echo "  Deployed: ${DEPLOYED[*]:-none}"
 echo "  Failed:   ${FAILED[*]:-none}"
 echo "  Account:  $AWS_ACCOUNT_ID"
 echo "  Region:   $AWS_DEFAULT_REGION"
+echo "  Time:     $(( $(date +%s) - START ))s"
 echo ""
 
 if [ ${#FAILED[@]} -gt 0 ]; then
