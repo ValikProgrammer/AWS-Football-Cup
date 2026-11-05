@@ -11,6 +11,11 @@ from state import summarize_state
 from fallback import FallbackConfig, build_last_resort
 from ticklog import log_tick, now_ms
 
+try:  # ball axis fix (match ball = {x, y=height, z=lateral}); optional like the policy
+    from norm import canonical_ball as _canonical_ball
+except Exception:  # pragma: no cover
+    _canonical_ball = None
+
 # Per-tick LLM path only (enable_llm=true): total tick budget in seconds.
 # The game allows ~2 s per decision; past this the policy command is sent.
 LLM_DEADLINE_S = float(__import__('os').environ.get('LLM_DEADLINE_S', '1.8'))
@@ -199,6 +204,15 @@ def create_invoke_handler(
         t0 = now_ms()
         prompt_data = parse_prompt(payload)
         team_id = team_id_from(prompt_data, log, position_label)
+        # Canonical ball axes before anything reads the state: state.py,
+        # fallback.py, match_memory and the policy all expect y = lateral.
+        # The tick log keeps the raw payload (logged as received).
+        raw_prompt = prompt_data
+        if _canonical_ball is not None and isinstance(prompt_data.get("gameState"), dict):
+            try:
+                prompt_data = dict(prompt_data, gameState=_canonical_ball(prompt_data["gameState"]))
+            except Exception as ce:
+                log.warn(f"{position_label} canonical_ball failed: {ce!r}")
         try:
             game_state = prompt_data.get("gameState", {})
 
@@ -220,7 +234,7 @@ def create_invoke_handler(
                     extra.update(session_info(context))
                 except Exception:
                     pass
-                log_tick(position_label, team_id, effective_pid, "policy", now_ms() - t0, commands, prompt_data,
+                log_tick(position_label, team_id, effective_pid, "policy", now_ms() - t0, commands, raw_prompt,
                          extra=extra)
                 yield json.dumps(commands)
                 return
@@ -234,7 +248,7 @@ def create_invoke_handler(
             except concurrent.futures.TimeoutError:
                 log.warn(f"{position_label} LLM over {LLM_DEADLINE_S}s deadline, sending policy command")
                 commands, extra = policy_commands(game_state, team_id, effective_pid, position_label)
-                log_tick(position_label, team_id, effective_pid, "policy", now_ms() - t0, commands, prompt_data,
+                log_tick(position_label, team_id, effective_pid, "policy", now_ms() - t0, commands, raw_prompt,
                          error="llm_timeout", extra=extra)
                 yield json.dumps(commands)
                 return
@@ -251,13 +265,13 @@ def create_invoke_handler(
             if commands:
                 log.info(f"LLM returned {len(commands)} commands: "
                          f"{[c.get('commandType') for c in commands]}")
-                log_tick(position_label, team_id, effective_pid, "llm", now_ms() - t0, commands, prompt_data)
+                log_tick(position_label, team_id, effective_pid, "llm", now_ms() - t0, commands, raw_prompt)
                 yield json.dumps(commands)
             else:
                 log.warn(f"LLM parse failed, using fallback. Response: {response_text[:200]}")
                 commands = fallback_fn(game_state, team_id, effective_pid)
                 log.info(f"Fallback returned {len(commands)} commands")
-                log_tick(position_label, team_id, effective_pid, "fallback", now_ms() - t0, commands, prompt_data,
+                log_tick(position_label, team_id, effective_pid, "fallback", now_ms() - t0, commands, raw_prompt,
                          error="parse_failed: " + response_text[:200])
                 yield json.dumps(commands)
 
@@ -275,7 +289,7 @@ def create_invoke_handler(
                     team_id,
                     effective_pid,
                 )
-                log_tick(position_label, team_id, effective_pid, "fallback", now_ms() - t0, commands, prompt_data,
+                log_tick(position_label, team_id, effective_pid, "fallback", now_ms() - t0, commands, raw_prompt,
                          error=repr(e))
                 yield json.dumps(commands)
             except Exception as fallback_error:
@@ -284,7 +298,7 @@ def create_invoke_handler(
                 # team_id came from the payload at entry, so the last resort
                 # is no longer hardcoded to HOME.
                 cmd["teamId"] = team_id
-                log_tick(position_label, team_id, my_player_id, "last_resort", now_ms() - t0, [cmd], prompt_data,
+                log_tick(position_label, team_id, my_player_id, "last_resort", now_ms() - t0, [cmd], raw_prompt,
                          error=repr(fallback_error))
                 yield json.dumps([cmd])
 

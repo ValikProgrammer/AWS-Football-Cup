@@ -1,0 +1,231 @@
+{
+ "gameState": {
+  "tick": 6052,
+  "gameTime": 59.141163,
+  "playMode": "OPEN_PLAY",
+  "score": {
+   "home": 0,
+   "away": 0
+  },
+  "ball": {
+   "position": {
+    "x": 6.5553603,
+    "y": 0.15700002,
+    "z": 1.6044487
+   },
+   "velocity": {
+    "x": -3.423931e-05,
+    "y": 0,
+    "z": -0.45225677
+   },
+   "isFree": true,
+   "possessionAgentId": null,
+   "rotation": {
+    "x": 47.020405,
+    "y": 189.17238,
+    "z": 156.03262
+   },
+   "angularVelocity": {
+    "x": -3.6180477,
+    "y": -3.8995328,
+    "z": 0.000274117
+   }
+  },
+  "players": [
+   {
+    "teamCode": "home",
+    "agentId": "agentId_0",
+    "position": {
+     "x": -5.9149976,
+     "y": 0.26749334
+    },
+    "velocity": {
+     "x": 0,
+     "y": 0
+    },
+    "orientation": 75.403015,
+    "stamina": 1,
+    "currentAction": "IDLE",
+    "lastAction": "StayNearGoal",
+    "speed": 0,
+    "isSprinting": false
+   },
+   {
+    "teamCode": "home",
+    "agentId": "agentId_1",
+    "position": {
+     "x": -3.168773,
+     "y": 0.8427029
+    },
+    "velocity": {
+     "x": -0.5929155,
+     "y": 0.80526465
+    },
+    "orientation": 323.63583,
+    "stamina": 1,
+    "currentAction": "MOVING",
+    "lastAction": "MoveToTarget",
+    "speed": 0.99999994,
+    "isSprinting": false
+   },
+   {
+    "teamCode": "home",
+    "agentId": "agentId_2",
+    "position": {
+     "x": 0.38116863,
+     "y": -0.004263471
+    },
+    "velocity": {
+     "x": -0.3751934,
+     "y": -0.20285624
+    },
+    "orientation": 186.61179,
+    "stamina": 0.7292116,
+    "currentAction": "MOVING",
+    "lastAction": "MoveToTarget",
+    "speed": 0.42652166,
+    "isSprinting": false
+   },
+   {
+    "teamCode": "home",
+    "agentId": "agentId_3",
+    "position": {
+     "x": 5.1971164,
+     "y": 2.0324788
+    },
+    "velocity": {
+     "x": 1.1985224,
+     "y": -0.5081971
+    },
+    "orientation": 110.448235,
+    "stamina": 0,
+    "currentAction": "MOVING",
+    "lastAction": "CoachIntercept",
+    "speed": 1.3018143,
+    "isSprinting": false
+   },
+   {
+    "teamCode": "home",
+    "agentId": "agentId_4",
+    "position": {
+     "x": 4.024488,
+     "y": -1.903301
+    },
+    "velocity": {
+     "x": 0.8117646,
+     "y": 1.2613636
+    },
+    "orientation": 32.76376,
+    "stamina": 0.15804787,
+    "currentAction": "MOVING",
+    "lastAction": "ChaseBall",
+    "speed": 1.5,
+    "isSprinting": true
+   },
+   {
+    "teamCode": "away",
+    "agentId": "agentId_0",
+    "position": {
+     "x": -6.4,
+     "y": -0.8352189
+    },
+    "velocity": {
+     "x": -0.9999246,
+     "y": 0.012280371
+    },
+    "orientation": 270.70364,
+    "stamina": 1,
+    "currentAction": "MOVING",
+    "lastAction": "CoachMoveTo",
+    "speed": 1,
+    "isSprinting": false
+   },
+   {
+    "teamCode": "away",
+    "agentId": "agentId_1",
+    "position": {
+     "x": 1.9268817,
+     "y": 1.2718714
+    },
+    "velocity": {
+     "x": 0.7811611,
+     "y": -0.62432945
+    },
+    "orientation": 128.633,
+    "stamina": 1,
+    "currentAction": "MOVING",
+    "lastAction": "CoachMark",
+    "speed": 1,
+    "isSprinting": false
+   },
+   {
+    "teamCode": "away",
+    "agentId": "agentId_2",
+    "position": {
+     "x": 0.49783483,
+     "y": 0.38201344
+    },
+    "velocity": {
+     "x": 0.94368696,
+     "y": 0.33083975
+    },
+    "orientation": 70.680244,
+    "stamina": 0.50511163,
+    "currentAction": "MOVING",
+    "lastAction": "StayNearGoal",
+    "speed": 1,
+    "isSprinting": false
+   },
+   {
+    "teamCode": "away",
+    "agentId": "agentId_3",
+    "position": {
+     "x": 0.52802765,
+     "y": -0.32885575
+    },
+    "velocity": {
+     "x": 0.9988719,
+     "y": 0.04748434
+    },
+    "orientation": 87.27832,
+    "stamina": 1,
+    "currentAction": "MOVING",
+    "lastAction": "CoachMark",
+    "speed": 0.99999994,
+    "isSprinting": false
+   },
+   {
+    "teamCode": "away",
+    "agentId": "agentId_4",
+    "position": {
+     "x": 5.186659,
+     "y": 2.9811761
+    },
+    "velocity": {
+     "x": -0.087806165,
+     "y": 0.9961376
+    },
+    "orientation": 354.9626,
+    "stamina": 0.15273678,
+    "currentAction": "MOVING",
+    "lastAction": "CoachMoveTo",
+    "speed": 1,
+    "isSprinting": false
+   }
+  ],
+  "teamChat": []
+ },
+ "teamId": 0,
+ "myPlayers": [
+  4
+ ],
+ "unlockedCommands": [],
+ "previousCommand": {
+  "commandType": "MOVE_TO",
+  "parameters": {
+   "target_x": 3.967,
+   "target_y": -2.431,
+   "sprint": false
+  }
+ }
+}

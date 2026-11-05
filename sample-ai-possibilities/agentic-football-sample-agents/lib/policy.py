@@ -76,7 +76,7 @@ def _apply_context(p: dict, gs: dict, team_id: int, order: str | None) -> dict:
 
 def decide(game_state: dict, team_id: int, pid: int, role: str, params: dict,
            order: str | None = None) -> list[Candidate]:
-    gs = game_state or {}
+    gs = norm.canonical_ball(game_state or {})
     p = _apply_context(params, gs, team_id, order)
     sx, sy = norm.update_scale(gs)
     fr = norm.Frame(sx, sy, team_id)
@@ -136,6 +136,32 @@ def _pass_type(d, corr, recv_open, ahead, p):
     return "GROUND"
 
 
+def shot_angle_deg(me, goal_hw: float) -> float:
+    """Angle (degrees) the goal mouth (posts at (1, +-goal_hw)) subtends from me."""
+    dx = 1.0 - me[0]
+    a1 = math.atan2(goal_hw - me[1], dx)
+    a2 = math.atan2(-goal_hw - me[1], dx)
+    return math.degrees(abs(a1 - a2))
+
+
+def _shot_aim(me, gk, block: float) -> str:
+    """CENTER, unless the GK stands on the shooter-goal centre line.
+
+    Then the bottom corner on the far side from the GK. +y is the
+    attacker's left: GK on the +y side of the line -> "BR".
+    """
+    if gk is None:
+        return "CENTER"
+    goal = (1.0, 0.0)
+    if norm.seg_dist(gk, me, goal) > block:
+        return "CENTER"
+    dx, dy = goal[0] - me[0], goal[1] - me[1]
+    side = dx * (gk[1] - me[1]) - dy * (gk[0] - me[0])   # > 0: GK left of the line
+    if abs(side) < 1e-9:
+        side = -me[1] if abs(me[1]) > 1e-9 else 1.0   # GK dead centre: far post from me
+    return "BR" if side > 0 else "BL"
+
+
 def _on_ball(c) -> list[Candidate]:
     p, fr, pid, tid, me, opps = c["p"], c["fr"], c["pid"], c["tid"], c["me"], c["opps"]
     out = []
@@ -158,28 +184,32 @@ def _on_ball(c) -> list[Candidate]:
     # SHOOT
     goal = (1.0, 0.0)
     dg = dist(me, goal)
+    ghw = p.get("goal_hw", 0.155)
+    angle = shot_angle_deg(me, ghw)
+    angle_ok = angle >= p.get("min_shot_angle_deg", 12.0)
+    power = 0.85 if dg < 0.4 else 1.0
 
     # OPEN GOAL (hard rule): nobody, GK included, on the line to the goal centre
-    # -> shoot at once, straight at the centre. Beats every other option.
+    # and the goal mouth wide enough -> shoot at once, straight at the centre.
     corr_all = corridor(me, goal, opps)
-    if me[0] >= p.get("open_goal_min_x", 0.0) and corr_all >= p["shot_corridor"]:
-        power = 0.85 if dg < 0.4 else 1.0
+    if me[0] >= p.get("open_goal_min_x", 0.0) and corr_all >= p["shot_corridor"] and angle_ok:
         return [Candidate(_cmd("SHOOT", pid, tid, {"aim_location": "CENTER", "power": power}),
-                          2.0, f"open goal d={dg:.2f} corr_all={corr_all:.2f}")]
+                          2.0, f"open goal d={dg:.2f} corr_all={corr_all:.2f} ang={angle:.0f}")]
     blockers = [o for o in opps if o is not c["opp_gk"]]
     corr = corridor(me, goal, blockers)
-    gk_off_line = c["opp_gk"] is not None and c["opp_gk"][0] < 1.0 - p["gk_far_line"]
-    can = (dg <= p["shoot_range"] and corr >= p["shot_corridor"]) or (gk_off_line and me[0] > 0)
+    gk = c["opp_gk"]
+    gk_off_line = gk is not None and gk[0] < 1.0 - p["gk_far_line"]
+    can = angle_ok and ((dg <= p["shoot_range"] and corr >= p["shot_corridor"])
+                        or (gk_off_line and dg <= p.get("gk_off_max_d", 0.6)
+                            and corr >= p.get("gk_off_corridor", 0.0)))
     if can:
-        gk_y = c["opp_gk"][1] if c["opp_gk"] is not None else 0.0
-        side = "R" if gk_y > 0 else "L"   # +y is the attacker's left
-        aim = ("B" if dg < 0.3 else "T") + side
+        aim = _shot_aim(me, gk, ghw * p.get("gk_block_frac", 0.35))
         succ = _clamp(1.0 - dg / (p["shoot_range"] + 0.3), 0.1, 0.9) * (0.6 + 0.4 * min(corr / 0.15, 1.0))
         if gk_off_line:
             succ = max(succ, 0.6)
         s = 1.0 * succ + p["shot_bonus"]
-        out.append(Candidate(_cmd("SHOOT", pid, tid, {"aim_location": aim, "power": 0.9 if dg < 0.3 else 1.0}),
-                             s, f"shoot d={dg:.2f} corr={corr:.2f}"))
+        out.append(Candidate(_cmd("SHOOT", pid, tid, {"aim_location": aim, "power": power}),
+                             s, f"shoot {aim} d={dg:.2f} corr={corr:.2f} ang={angle:.0f}"))
 
     # PASS
     pb = p["pass_bonus"] + (p["pass_bonus_mid"] if c["role"] == "MID" else 0.0)
