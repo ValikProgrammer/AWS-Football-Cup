@@ -1,0 +1,452 @@
+{
+  "$schema": "https://schema.agentcore.aws.dev/v1/agentcore.json",
+  "name": "TeamStrandsGateway",
+  "version": 1,
+  "managedBy": "CDK",
+  "tags": {
+    "agentcore:created-by": "agentcore-cli",
+    "agentcore:project-name": "TeamStrandsGateway"
+  },
+  "runtimes": [
+    {
+      "name": "ai_gk_gateway_agent",
+      "build": "CodeZip",
+      "entrypoint": "src/main.py",
+      "codeLocation": "ai-gk/",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP"
+    },
+    {
+      "name": "ai_def_gateway_agent",
+      "build": "CodeZip",
+      "entrypoint": "src/main.py",
+      "codeLocation": "ai-def/",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP"
+    },
+    {
+      "name": "ai_mid_gateway_agent",
+      "build": "CodeZip",
+      "entrypoint": "src/main.py",
+      "codeLocation": "ai-mid/",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP"
+    },
+    {
+      "name": "ai_fwd1_gateway_agent",
+      "build": "CodeZip",
+      "entrypoint": "src/main.py",
+      "codeLocation": "ai-fwd1/",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP"
+    },
+    {
+      "name": "ai_fwd2_gateway_agent",
+      "build": "CodeZip",
+      "entrypoint": "src/main.py",
+      "codeLocation": "ai-fwd2/",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP"
+    }
+  ],
+  "memories": [],
+  "knowledgeBases": [],
+  "credentials": [],
+  "evaluators": [],
+  "onlineEvalConfigs": [],
+  "agentCoreGateways": [
+    {
+      "name": "tactical-tools",
+      "description": "Tactical analysis MCP tools for the AI football team",
+      "authorizerType": "NONE",
+      "protocolType": "MCP",
+      "targets": [
+        {
+          "name": "calculate-pass-options",
+          "targetType": "lambda",
+          "toolDefinitions": [
+            {
+              "name": "calculate_pass_options",
+              "description": "Calculate pass success probability for each teammate",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "passer_position": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  },
+                  "teammates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "player_id": {
+                          "type": "integer"
+                        },
+                        "position": {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "type": "number"
+                            },
+                            "y": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "player_id",
+                        "position"
+                      ]
+                    }
+                  },
+                  "opponents": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "player_id": {
+                          "type": "integer"
+                        },
+                        "position": {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "type": "number"
+                            },
+                            "y": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "player_id",
+                        "position"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "passer_position",
+                  "teammates",
+                  "opponents"
+                ]
+              }
+            }
+          ],
+          "compute": {
+            "host": "Lambda",
+            "pythonVersion": "PYTHON_3_12",
+            "implementation": {
+              "language": "Python",
+              "path": "gateway_tools/",
+              "handler": "calculate_pass_options.lambda_handler"
+            },
+            "timeout": 30,
+            "memorySize": 512
+          }
+        },
+        {
+          "name": "evaluate-shot",
+          "targetType": "lambda",
+          "toolDefinitions": [
+            {
+              "name": "evaluate_shot",
+              "description": "Evaluate shot success probability and recommend aim point",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "shooter_position": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  },
+                  "goalkeeper_position": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  },
+                  "team_side": {
+                    "type": "string",
+                    "enum": [
+                      "HOME",
+                      "AWAY"
+                    ]
+                  },
+                  "blocker_positions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "number"
+                        },
+                        "y": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "shooter_position",
+                  "goalkeeper_position",
+                  "team_side"
+                ]
+              }
+            }
+          ],
+          "compute": {
+            "host": "Lambda",
+            "pythonVersion": "PYTHON_3_12",
+            "implementation": {
+              "language": "Python",
+              "path": "gateway_tools/",
+              "handler": "evaluate_shot.lambda_handler"
+            },
+            "timeout": 30,
+            "memorySize": 512
+          }
+        },
+        {
+          "name": "find-open-space",
+          "targetType": "lambda",
+          "toolDefinitions": [
+            {
+              "name": "find_open_space",
+              "description": "Grid-based open space finder by zone (attack/midfield/defense)",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "opponent_positions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "number"
+                        },
+                        "y": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y"
+                      ]
+                    }
+                  },
+                  "zone": {
+                    "type": "string",
+                    "enum": [
+                      "attack",
+                      "midfield",
+                      "defense"
+                    ]
+                  },
+                  "team_side": {
+                    "type": "string",
+                    "enum": [
+                      "HOME",
+                      "AWAY"
+                    ]
+                  },
+                  "my_position": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  }
+                },
+                "required": [
+                  "opponent_positions",
+                  "zone",
+                  "team_side",
+                  "my_position"
+                ]
+              }
+            }
+          ],
+          "compute": {
+            "host": "Lambda",
+            "pythonVersion": "PYTHON_3_12",
+            "implementation": {
+              "language": "Python",
+              "path": "gateway_tools/",
+              "handler": "find_open_space.lambda_handler"
+            },
+            "timeout": 30,
+            "memorySize": 512
+          }
+        },
+        {
+          "name": "get-defensive-assignment",
+          "targetType": "lambda",
+          "toolDefinitions": [
+            {
+              "name": "get_defensive_assignment",
+              "description": "Rank opponent threats for defensive marking priority",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "opponents": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "player_id": {
+                          "type": "integer"
+                        },
+                        "position": {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "type": "number"
+                            },
+                            "y": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "player_id",
+                        "position"
+                      ]
+                    }
+                  },
+                  "ball": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "possession_player_id": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  },
+                  "my_position": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  },
+                  "team_side": {
+                    "type": "string",
+                    "enum": [
+                      "HOME",
+                      "AWAY"
+                    ]
+                  }
+                },
+                "required": [
+                  "opponents",
+                  "ball",
+                  "my_position",
+                  "team_side"
+                ]
+              }
+            }
+          ],
+          "compute": {
+            "host": "Lambda",
+            "pythonVersion": "PYTHON_3_12",
+            "implementation": {
+              "language": "Python",
+              "path": "gateway_tools/",
+              "handler": "get_defensive_assignment.lambda_handler"
+            },
+            "timeout": 30,
+            "memorySize": 512
+          }
+        }
+      ]
+    }
+  ],
+  "policyEngines": [],
+  "configBundles": [],
+  "abTests": [],
+  "harnesses": [],
+  "datasets": [],
+  "payments": []
+}
