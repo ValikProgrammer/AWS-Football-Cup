@@ -24,6 +24,7 @@ for name in $NAMES; do
     case "$s" in "$PREFIX"*) ;; *) echo "$name: skip $s"; continue ;; esac
     code=$(aws bedrock-agentcore stop-runtime-session --region "$REGION" --agent-runtime-arn "$arn" \
            --runtime-session-id "$s" --qualifier DEFAULT --query statusCode --output text 2>&1 | tail -1)
+    case "$code" in *ResourceNotFoundException*) code="already stopped" ;; esac
     echo "$name: stop $s -> $code"
   done
 done
