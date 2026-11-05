@@ -197,7 +197,7 @@ def _on_ball(c) -> list[Candidate]:
         space, _ = nearest((tx, ty), opps)
         succ = _clamp(space * 3.0, 0.05, 0.85)
         value = 0.2 + 0.4 * (min(tx, 1.0) + 1) / 2
-        s = value * succ - risk_base * (1 - succ)
+        s = value * succ - risk_base * (1 - succ) - p.get("dribble_penalty", 0.0)
         rx, ry = fr.to_raw(tx, ty)
         out.append(Candidate(_cmd("MOVE_TO", pid, tid, {"target_x": rx, "target_y": ry, "sprint": c["sprint"]}),
                              s, f"dribble {name} space={space:.2f}"))
@@ -212,9 +212,29 @@ def _on_ball(c) -> list[Candidate]:
     return out
 
 
+_SHAPE = {"DEF": (-0.6, 0.0), "MID": (-0.2, 0.0), "FWD1": (0.25, 0.35), "FWD2": (0.25, -0.35)}
+
+
+def _shape(c, score, why, cap_def=True) -> Candidate:
+    """Active MOVE_TO to the role's formation spot; the block shifts with the ball.
+
+    Replaces CLEAR_OVERRIDE: the scrimmage fitness check counts CLEAR_OVERRIDE
+    as a non-active command and fails a role that sends it on most ticks.
+    """
+    p, fr, pid, tid, me, b = c["p"], c["fr"], c["pid"], c["tid"], c["me"], c["ball"]
+    ax, ay = _SHAPE.get(c["role"], (-0.2, 0.0))
+    tx = _clamp(ax + 0.4 * b[0] + 0.3 * p["line_height"], -0.85, 0.85)
+    if c["role"] == "DEF" and cap_def:
+        tx = min(tx, p["def_max_x"] - 0.1)
+    ty = _clamp(ay * fr.half_w / 0.64 + 0.3 * b[1], -fr.half_w * 0.9, fr.half_w * 0.9)
+    spr = c["sprint"] and dist(me, (tx, ty)) > 0.4
+    rx, ry = fr.to_raw(tx, ty)
+    return Candidate(_cmd("MOVE_TO", pid, tid, {"target_x": rx, "target_y": ry, "sprint": spr}), score, why)
+
+
 def _attack_off_ball(c, holder_pid) -> list[Candidate]:
     p, fr, pid, tid, me, role = c["p"], c["fr"], c["pid"], c["tid"], c["me"], c["role"]
-    out = [Candidate(_cmd("CLEAR_OVERRIDE", pid, tid, {}), 0.4, "engine support")]
+    out = [_shape(c, 0.4, "shape support", cap_def=False)]
     if role in ("FWD1", "FWD2") and me[0] < c["ball"][0] + 0.1:
         lane = 0.3 if role == "FWD1" else -0.3
         if abs(me[1]) > 0.1:          # keep the flank the player is already on
@@ -298,7 +318,7 @@ def _defend(c, hq, holder_pid) -> list[Candidate]:
     if is_def:
         out.append(hold_own_half(0.3, "def hold own half"))
     else:
-        out.append(Candidate(_cmd("CLEAR_OVERRIDE", pid, tid, {}), 0.2, "engine shape"))
+        out.append(_shape(c, 0.2, "shape defend"))
     return out
 
 
@@ -309,7 +329,7 @@ def _transition(c) -> list[Candidate]:
     if c["role"] == "GK" or pid == 0:
         return [x for x in (_gk_block(c, b), _gk_line(c, 0.5, "gk line (loose ball)")) if x]
     outfield = sorted((t for t in c["mates"] if t != 0), key=lambda t: (dist(c["mates"][t], b), t))
-    out = [Candidate(_cmd("CLEAR_OVERRIDE", pid, tid, {}), 0.4, "engine recover shape")]
+    out = [_shape(c, 0.4, "shape recover")]
     if outfield and outfield[0] == pid:
         out.append(Candidate(_cmd("INTERCEPT", pid, tid, {"aggressive": True}, 3), 0.9, "nearest: chase ball"))
         rx, ry = fr.to_raw(*b)
