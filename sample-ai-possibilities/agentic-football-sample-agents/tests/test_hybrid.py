@@ -18,14 +18,23 @@ def test_coach_shoot_makes_carrier_shoot_in_their_half():
                                        ("away", "agentId_0"): (53, 0)})
     norm.reset()
     c = policy.decide(gs, 0, 3, "FWD1", P, "shoot")[0]
-    assert c.command["commandType"] == "SHOOT" and c.reason.startswith("coach shoot"), c.reason
+    assert c.command["commandType"] == "SHOOT" and c.reason.startswith("coach C1"), c.reason
     assert c.command["parameters"]["aim_location"] in ("CENTER", "BL", "BR")
 
 
-def test_coach_shoot_not_from_own_half():
-    gs = _state((-20, 0), "agentId_2", {("home", "agentId_2"): (-20, 0)})
+def test_coach_c1_shoots_from_anywhere():
+    # own half and from beside the post: C1 still shoots (coach's choice)
+    for ball, holder, pos in (((-20, 0), "agentId_2", (-20, 0)), ((50, 25), "agentId_3", (50, 25))):
+        gs = _state(ball, holder, {("home", holder): pos})
+        norm.reset()
+        c = policy.decide(gs, 0, int(holder[-1]), "MID" if holder.endswith("2") else "FWD1", P, "shoot")[0]
+        assert c.command["commandType"] == "SHOOT" and c.command["parameters"]["aim_location"] == "CENTER", c.reason
+
+
+def test_coach_c1_gk_still_distributes():
+    gs = _state((-50, 0), "agentId_0", {("home", "agentId_0"): (-50, 0)})
     norm.reset()
-    assert not policy.decide(gs, 0, 2, "MID", P, "shoot")[0].reason.startswith("coach shoot")
+    assert policy.decide(gs, 0, 0, "GK", P, "shoot")[0].command["commandType"] == "GK_DISTRIBUTE"
 
 
 def test_coach_pass_makes_carrier_pass():

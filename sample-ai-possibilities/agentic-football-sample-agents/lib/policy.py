@@ -59,10 +59,12 @@ def _apply_context(p: dict, gs: dict, team_id: int, order: str | None) -> dict:
     p["use_mark"] = False
     p["force_shoot"] = bool(p.get("shoot_on_sight", 0))   # S7 SHOOT_ON_SIGHT: always on
     p["force_pass"] = False
+    p["force_shoot_any"] = False
     if order == "shoot":
         p["shot_bonus"] += 0.2
         p["shoot_range"] += 0.15
-        p["force_shoot"] = True      # coach C1: carrier in their half shoots at once
+        p["force_shoot"] = True
+        p["force_shoot_any"] = True  # coach C1: the carrier shoots now, from anywhere, no limits
     elif order == "attack":
         p["line_height"] += 0.15
         p["forward_pass_weight"] += 0.15
@@ -211,7 +213,13 @@ def _on_ball(c) -> list[Candidate]:
         return [Candidate(_cmd("SHOOT", pid, tid, {"aim_location": "CENTER", "power": power}),
                           2.0, f"open goal d={dg:.2f} corr_all={corr_all:.2f} ang={angle:.0f}")]
 
-    # COACH SHOOT (C1): first carrier in the opponent half shoots now (centre, angle limit kept).
+    # COACH C1: shoot now, whatever the position or angle (the coach's explicit choice).
+    if p.get("force_shoot_any"):
+        far_power = power if dg < 1.0 else 0.95
+        return [Candidate(_cmd("SHOOT", pid, tid, {"aim_location": "CENTER", "power": far_power}),
+                          3.0, f"coach C1 shoot d={dg:.2f} ang={angle:.0f}")]
+
+    # S7 SHOOT_ON_SIGHT: first carrier in the opponent half shoots now (centre, angle limit kept).
     if p.get("force_shoot") and me[0] > 0 and angle_ok:
         aim = _shot_aim(me, c["opp_gk"], ghw * p.get("gk_block_frac", 0.35))
         return [Candidate(_cmd("SHOOT", pid, tid, {"aim_location": aim, "power": power}),
