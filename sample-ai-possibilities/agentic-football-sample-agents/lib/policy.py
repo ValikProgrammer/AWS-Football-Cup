@@ -158,6 +158,14 @@ def _on_ball(c) -> list[Candidate]:
     # SHOOT
     goal = (1.0, 0.0)
     dg = dist(me, goal)
+
+    # OPEN GOAL (hard rule): nobody, GK included, on the line to the goal centre
+    # -> shoot at once, straight at the centre. Beats every other option.
+    corr_all = corridor(me, goal, opps)
+    if me[0] >= p.get("open_goal_min_x", 0.0) and corr_all >= p["shot_corridor"]:
+        power = 0.85 if dg < 0.4 else 1.0
+        return [Candidate(_cmd("SHOOT", pid, tid, {"aim_location": "CENTER", "power": power}),
+                          2.0, f"open goal d={dg:.2f} corr_all={corr_all:.2f}")]
     blockers = [o for o in opps if o is not c["opp_gk"]]
     corr = corridor(me, goal, blockers)
     gk_off_line = c["opp_gk"] is not None and c["opp_gk"][0] < 1.0 - p["gk_far_line"]
@@ -299,6 +307,15 @@ def _defend(c, hq, holder_pid) -> list[Candidate]:
     high_ball = hq[0] > p["line_height"] + 0.2
     press_allowed = not (p["early"] and high_ball) and hq[0] <= p.get("press_max_x", 9.0)
     second = (rank == 1 and p["press_bodies"] >= 2 and dist(me, hq) < p["second_press_dist"])
+    d_hold = dist(me, hq)
+    if (rank == 0 and press_allowed and d_hold <= p.get("tackle_dist", 0.07) and hq[0] >= p.get("tackle_min_x", -0.75)
+            and holder_pid is not None and def_ok(hq[0])):
+        mx, my = fr.to_raw(*me)
+        hx, hy = fr.to_raw(*hq)
+        reach = round(math.hypot(hx - mx, hy - my) * 1.2, 2)
+        out.append(Candidate(_cmd("SLIDE_TACKLE", pid, tid,
+                                  {"target_player_id": holder_pid, "sprint": True, "distance": reach}),
+                             0.95, f"slide tackle d={d_hold:.2f}"))
     if (rank == 0 or second) and press_allowed and def_ok(hq[0]):
         inten = p["press_intensity"] * (0.7 if p["early"] else 1.0)
         out.append(Candidate(_cmd("PRESS_BALL", pid, tid, {"intensity": round(inten, 2)}, 3),

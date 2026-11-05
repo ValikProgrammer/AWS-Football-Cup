@@ -1,5 +1,6 @@
 """Base agent factory for AI soccer position agents."""
 
+import concurrent.futures
 import json
 from typing import Callable
 from strands import Agent
@@ -9,6 +10,11 @@ from parsing import parse_commands
 from state import summarize_state
 from fallback import FallbackConfig, build_last_resort
 from ticklog import log_tick, now_ms
+
+# Per-tick LLM path only (enable_llm=true): total tick budget in seconds.
+# The game allows ~2 s per decision; past this the policy command is sent.
+LLM_DEADLINE_S = float(__import__('os').environ.get('LLM_DEADLINE_S', '1.8'))
+_LLM_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix='afc-llm')
 
 import os
 
@@ -221,7 +227,17 @@ def create_invoke_handler(
 
             log.info(f"{position_label} agent invoked for team {team_id}, controlling player {effective_pid}")
 
-            response = _fresh_agent(agent)(state_summary)
+            fut = _LLM_POOL.submit(_fresh_agent(agent), state_summary)
+            budget = max(0.05, LLM_DEADLINE_S - (now_ms() - t0) / 1000.0)
+            try:
+                response = fut.result(timeout=budget)
+            except concurrent.futures.TimeoutError:
+                log.warn(f"{position_label} LLM over {LLM_DEADLINE_S}s deadline, sending policy command")
+                commands, extra = policy_commands(game_state, team_id, effective_pid, position_label)
+                log_tick(position_label, team_id, effective_pid, "policy", now_ms() - t0, commands, prompt_data,
+                         error="llm_timeout", extra=extra)
+                yield json.dumps(commands)
+                return
             response_text = str(response)
 
             def on_recovered(raw: str) -> None:

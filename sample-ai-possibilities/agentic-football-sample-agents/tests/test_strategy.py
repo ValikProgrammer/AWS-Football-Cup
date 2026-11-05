@@ -112,8 +112,9 @@ def _opp_holds_high():
 def test_low_block_does_not_press_high():
     gs = _opp_holds_high()
     types = lambda p: [policy.decide(gs, 0, i, ROLES[i], p)[0].command["commandType"] for i in ROLES]
-    assert "PRESS_BALL" in types(PARAMS)
-    assert "PRESS_BALL" not in types(strategies.apply(PARAMS, "LOW_BLOCK"))
+    pressing = {"PRESS_BALL", "SLIDE_TACKLE"}   # a close presser tackles instead of pressing
+    assert pressing & set(types(PARAMS))
+    assert not pressing & set(types(strategies.apply(PARAMS, "LOW_BLOCK")))
 
 
 # ---------------------------------------------------------------- shared
