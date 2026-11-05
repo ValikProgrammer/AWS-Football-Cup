@@ -43,6 +43,16 @@ except Exception:  # pragma: no cover
 _CTX_LOGGED = False
 
 
+def team_flag(key: str, default: bool) -> bool:
+    """Boolean switch from team_config.json (read each call; tiny file)."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "team_config.json")) as f:
+            v = json.load(f).get(key, default)
+        return bool(v)
+    except Exception:
+        return default
+
+
 def llm_enabled() -> bool:
     """team_config.json enable_llm; env ENABLE_LLM=1 forces it on."""
     if os.environ.get("ENABLE_LLM") == "1":
@@ -133,8 +143,11 @@ def strategy_commands(game_state: dict, team_id: int, pid: int, label: str):
         if _orders.strategy_for(order):
             order = None
     else:
-        strategy = _shared.read_strategy()
-        src = "shared" if _shared.source() != "default" else "default"
+        if team_flag("shared_state", True):
+            strategy = _shared.read_strategy()
+            src = "shared" if _shared.source() != "default" else "default"
+        else:                      # coach-only mode: no SSM read on the tick path
+            strategy, src = "BALANCED", "default"
     params = _strategies.apply(_POLICY_PARAMS, strategy)
     cands = _policy.decide(game_state, team_id, pid, label, params, order)
     cmd, engine = _pick_command(cands, label)
@@ -148,7 +161,7 @@ def strategy_commands(game_state: dict, team_id: int, pid: int, label: str):
         "engine": engine,
         "top": [{"t": c.command.get("commandType"), "s": round(c.score, 3), "r": c.reason} for c in cands[:3]],
     }
-    if label == "GK":
+    if label == "GK" and team_flag("enable_manager", True):
         try:
             trig = _manager.maybe_trigger(game_state, team_id, label)
             if trig:

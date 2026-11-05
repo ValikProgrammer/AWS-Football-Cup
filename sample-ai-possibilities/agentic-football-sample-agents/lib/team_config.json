@@ -1,1 +1,5 @@
-{"enable_llm": false}
+{
+  "enable_llm": false,
+  "enable_manager": false,
+  "shared_state": false
+}

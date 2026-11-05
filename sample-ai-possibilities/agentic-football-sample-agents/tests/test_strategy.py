@@ -407,6 +407,8 @@ def _call(handler, gs, team, pid, ctx, capsys):
 
 
 def test_handler_logs_shared_strategy(monkeypatch, capsys):
+    import agent_base as _ab
+    monkeypatch.setattr(_ab, "team_flag", lambda key, default: True)   # features on
     monkeypatch.setenv("SHARED_STATE", "1")
     fake = FakeSSM(rec("HIGH_PRESS"))
     shared.set_client(fake)
@@ -445,6 +447,8 @@ def test_handler_default_source_and_fallback_to_plain_policy(monkeypatch, capsys
 
 
 def test_handler_gk_triggers_manager_without_waiting(monkeypatch, capsys):
+    import agent_base as _ab
+    monkeypatch.setattr(_ab, "team_flag", lambda key, default: True)   # features on
     monkeypatch.setenv("ENABLE_MANAGER", "1")
     monkeypatch.setattr(manager, "LLM_CALL", lambda p: (time.sleep(0.5), '{"strategy":"COUNTER"}')[1])
     _, h = _handler(0, "GK", monkeypatch)
