@@ -10,6 +10,45 @@ from state import summarize_state
 from fallback import FallbackConfig, build_last_resort
 from ticklog import log_tick, now_ms
 
+import os
+
+try:  # the policy is optional: a missing file must not break the import
+    import policy as _policy
+    import orders as _orders
+    _POLICY_PARAMS = _policy.load_params()
+except Exception:  # pragma: no cover
+    _policy = None
+    _orders = None
+    _POLICY_PARAMS = None
+
+
+def llm_enabled() -> bool:
+    """team_config.json enable_llm; env ENABLE_LLM=1 forces it on."""
+    if os.environ.get("ENABLE_LLM") == "1":
+        return True
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "team_config.json")) as f:
+            return bool(json.load(f).get("enable_llm", False))
+    except Exception:
+        return False
+
+
+def policy_commands(game_state: dict, team_id: int, pid: int, label: str):
+    """(commands, extra) from the deterministic policy. Raises on any failure."""
+    if _policy is None or _POLICY_PARAMS is None:
+        raise RuntimeError("policy unavailable")
+    order = _orders.TRACKER.update(game_state, team_id, int(_POLICY_PARAMS.get("order_ticks", 20)))
+    cands = _policy.decide(game_state, team_id, pid, label, _POLICY_PARAMS, order)
+    cmd = dict(cands[0].command)
+    cmd["teamId"] = team_id
+    cmd["playerId"] = pid
+    extra = {
+        "order": order,
+        "reason": cands[0].reason,
+        "top": [{"t": c.command.get("commandType"), "s": round(c.score, 3), "r": c.reason} for c in cands[:3]],
+    }
+    return [cmd], extra
+
 
 def _fresh_agent(agent: Agent) -> Agent:
     """New Agent per tick on the same model: no history growth, no stdout token echo."""
@@ -97,6 +136,13 @@ def create_invoke_handler(
             state_summary = summarize_state(
                 game_state, team_id, effective_pid, position_label
             )
+            if not llm_enabled():
+                commands, extra = policy_commands(game_state, team_id, effective_pid, position_label)
+                log_tick(position_label, team_id, effective_pid, "policy", now_ms() - t0, commands, prompt_data,
+                         extra=extra)
+                yield json.dumps(commands)
+                return
+
             log.info(f"{position_label} agent invoked for team {team_id}, controlling player {effective_pid}")
 
             response = _fresh_agent(agent)(state_summary)
