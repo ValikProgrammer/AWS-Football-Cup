@@ -98,9 +98,13 @@ def strategy_commands(game_state: dict, team_id: int, pid: int, label: str):
         raise RuntimeError("strategy layer unavailable")
     _memory.update(game_state, team_id)
     order = _orders.TRACKER.update(game_state, team_id, int(_POLICY_PARAMS.get("order_ticks", 20)))
-    coach = _orders.strategy_for(order)
+    # Sticky coach strategy (S1..S6 / tactic words) beats the manager; an active
+    # action order (C1..C6 / shoot, ...) is kept alongside it.
+    coach = _orders.strategy_for(order) or _orders.strategy_for(getattr(_orders.TRACKER, "strategy_word", None))
     if coach:
-        strategy, src, order = coach, "coach", None
+        strategy, src = coach, "coach"
+        if _orders.strategy_for(order):
+            order = None
     else:
         strategy = _shared.read_strategy()
         src = "shared" if _shared.source() != "default" else "default"

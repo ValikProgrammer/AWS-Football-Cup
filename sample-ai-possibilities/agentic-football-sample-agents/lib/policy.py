@@ -71,6 +71,10 @@ def _apply_context(p: dict, gs: dict, team_id: int, order: str | None) -> dict:
         p["use_mark"] = True
     elif order == "pass":
         p["pass_bonus"] += 0.15
+    elif order == "tackle":          # C7: win the ball back now
+        p["tackle_dist"] = max(p.get("tackle_dist", -1), 0.08)
+        p["press_bodies"] = 2
+        p["early"] = False           # no "compact first seconds" restraint
     return p
 
 
@@ -187,7 +191,7 @@ def _on_ball(c) -> list[Candidate]:
     ghw = p.get("goal_hw", 0.155)
     angle = shot_angle_deg(me, ghw)
     angle_ok = angle >= p.get("min_shot_angle_deg", 12.0)
-    power = 0.85 if dg < 0.4 else 1.0
+    power = 0.75 if dg < 0.25 else (0.85 if dg < 0.5 else 0.95)   # 1.0 flies over the bar (peer runbook)
 
     # OPEN GOAL (hard rule): nobody, GK included, on the line to the goal centre
     # and the goal mouth wide enough -> shoot at once, straight at the centre.

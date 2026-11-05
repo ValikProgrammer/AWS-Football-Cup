@@ -77,3 +77,24 @@ def test_far_presser_does_not_tackle():
     gs = _state((10, 5), "agentId_2", {("away", "agentId_2"): (10, 5), ("home", "agentId_2"): (-5, 4)})
     c = _top(gs, 0, 2, "MID")
     assert c.command["commandType"] != "SLIDE_TACKLE", c.reason
+
+
+def test_c7_tackle_order_enables_tackle():
+    gs = _state((10, 5), "agentId_2", {("away", "agentId_2"): (10, 5), ("home", "agentId_2"): (8.5, 4)})
+    norm.reset()
+    assert policy.decide(gs, 0, 2, "MID", P)[0].command["commandType"] != "SLIDE_TACKLE"   # off by default
+    norm.reset()
+    c = policy.decide(gs, 0, 2, "MID", P, "tackle")[0].command
+    assert c["commandType"] == "SLIDE_TACKLE" and c["parameters"]["target_player_id"] == 2
+
+
+def test_shot_power_never_full():
+    import glob, json, os
+    fx = os.path.join(os.path.dirname(__file__), "fixtures")
+    for f in glob.glob(os.path.join(fx, "*.json")):
+        pl = json.load(open(f))
+        for pid, role in {1: "DEF", 2: "MID", 3: "FWD1", 4: "FWD2"}.items():
+            norm.reset()
+            for cand in policy.decide(pl["gameState"], pl["teamId"], pid, role, P):
+                if cand.command["commandType"] == "SHOOT":
+                    assert cand.command["parameters"]["power"] <= 0.95, (f, role)

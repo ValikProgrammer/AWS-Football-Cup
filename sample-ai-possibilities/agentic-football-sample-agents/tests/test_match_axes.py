@@ -223,7 +223,7 @@ def test_central_shot_gk_off_line_center():
     cands = _decide(_shot_state((2.6, 0.0), (3.5, -2.8)))
     top = cands[0]
     assert top.command["commandType"] == "SHOOT", top.reason
-    assert top.command["parameters"] == {"aim_location": "CENTER", "power": 1.0}
+    assert top.command["parameters"] == {"aim_location": "CENTER", "power": 0.95}
 
 
 def test_far_central_gk_off_line_no_shot():
