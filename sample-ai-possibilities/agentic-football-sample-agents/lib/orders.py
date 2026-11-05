@@ -8,6 +8,7 @@ VOCAB = ("shoot", "attack", "defend", "press", "mark", "pass", "tackle")
 STRATEGY_WORDS = {
     "balanced": "BALANCED", "possession": "POSSESSION", "counter": "COUNTER",
     "highpress": "HIGH_PRESS", "lowblock": "LOW_BLOCK", "allout": "ALL_OUT",
+    "shootonsight": "SHOOT_ON_SIGHT",
 }
 ALIASES = {"park": "lowblock"}   # "park the bus"
 AUTO = "auto"                     # coach releases the strategy back to the GK manager (S0)
@@ -16,7 +17,7 @@ THRESHOLD = 0.6
 
 # Short codes: S<n> = strategy, C<n> = one-word command (case-insensitive, "S 2" ok).
 CODES = {
-    "s0": "auto", "s1": "balanced", "s2": "highpress", "s3": "counter", "s4": "lowblock", "s5": "possession", "s6": "allout",
+    "s0": "auto", "s1": "balanced", "s2": "highpress", "s3": "counter", "s4": "lowblock", "s5": "possession", "s6": "allout", "s7": "shootonsight",
     "c1": "shoot", "c2": "attack", "c3": "defend", "c4": "press", "c5": "mark", "c6": "pass", "c7": "tackle",
 }
 _CODE_RE = re.compile(r"(?<![a-z0-9])([sc])\s*([0-9])(?![0-9])")

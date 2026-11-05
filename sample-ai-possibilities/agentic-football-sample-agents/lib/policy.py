@@ -57,7 +57,8 @@ def _apply_context(p: dict, gs: dict, team_id: int, order: str | None) -> dict:
     p["early"] = t < p["early_time_s"]
     p["no_fwd_sprint"] = False
     p["use_mark"] = False
-    p["force_shoot"] = p["force_pass"] = False
+    p["force_shoot"] = bool(p.get("shoot_on_sight", 0))   # S7 SHOOT_ON_SIGHT: always on
+    p["force_pass"] = False
     if order == "shoot":
         p["shot_bonus"] += 0.2
         p["shoot_range"] += 0.15

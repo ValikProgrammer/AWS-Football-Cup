@@ -41,6 +41,15 @@ PRESETS: dict[str, dict] = {
         "pressure_radius": 0.18,
         "risk_weight": 0.9,
     },
+    "SHOOT_ON_SIGHT": {           # S7: every carrier in their half shoots at once
+        "shoot_on_sight": 1,
+        "line_height": 0.2,
+        "def_max_x": 0.1,
+        "forward_pass_weight": 0.5,  # get the ball into their half fast
+        "through_ahead": 0.05,
+        "shot_bonus": 0.3,
+        "press_bodies": 2,
+    },
     "ALL_OUT": {
         "line_height": 0.3,
         "def_max_x": 0.2,
@@ -60,6 +69,7 @@ DESCRIPTIONS: dict[str, str] = {
     "HIGH_PRESS": "two pressers, high line, press hard near their goal",
     "LOW_BLOCK": "low compact line, one presser, clear under pressure",
     "ALL_OUT": "high line, shoot often, all forward (use when losing late)",
+    "SHOOT_ON_SIGHT": "every carrier in the opponent half shoots at once (centre)",
 }
 
 NAMES = tuple(PRESETS)

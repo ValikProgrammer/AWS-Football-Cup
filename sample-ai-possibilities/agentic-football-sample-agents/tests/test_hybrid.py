@@ -87,3 +87,31 @@ def test_dribble_in_their_half_is_engine_ok():
     cands = policy.decide(gs, 0, 3, "FWD1", P)
     drib = [c for c in cands if c.reason.startswith("dribble")]
     assert drib and all(c.engine_ok for c in drib)        # x = 22/55 = 0.4 > 0.3
+
+
+def test_s7_code_maps_to_shoot_on_sight():
+    import orders
+    assert orders.match_order("S7") == "shootonsight"
+    assert orders.match_order("ы7") == "shootonsight"
+    assert orders.strategy_for("shootonsight") == "SHOOT_ON_SIGHT"
+
+
+def test_shoot_on_sight_carrier_in_their_half_shoots_center():
+    import strategies
+    params = strategies.apply(P, "SHOOT_ON_SIGHT")
+    # FWD1 in their half, corridor blocked by a defender: BALANCED would not shoot
+    gs = _state((25, 3), "agentId_3", {("home", "agentId_3"): (25, 3), ("away", "agentId_1"): (32, 3),
+                                       ("away", "agentId_0"): (53, 0)})
+    norm.reset()
+    assert policy.decide(gs, 0, 3, "FWD1", P)[0].command["commandType"] != "SHOOT"
+    norm.reset()
+    c = policy.decide(gs, 0, 3, "FWD1", params)[0].command
+    assert c["commandType"] == "SHOOT" and c["parameters"]["aim_location"] == "CENTER"
+
+
+def test_shoot_on_sight_not_from_own_half():
+    import strategies
+    params = strategies.apply(P, "SHOOT_ON_SIGHT")
+    gs = _state((-20, 0), "agentId_2", {("home", "agentId_2"): (-20, 0)})
+    norm.reset()
+    assert policy.decide(gs, 0, 2, "MID", params)[0].command["commandType"] != "SHOOT"
