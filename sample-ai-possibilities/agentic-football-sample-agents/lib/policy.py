@@ -131,7 +131,7 @@ def decide(game_state: dict, team_id: int, pid: int, role: str, params: dict,
 def _pass_type(d, corr, recv_open, ahead, p):
     if d > p["aerial_dist"] or corr < p["pass_open_min"]:
         return "AERIAL"
-    if ahead > 0.15 and recv_open > p["pass_open_min"]:
+    if ahead > p.get("through_ahead", 0.15) and recv_open > p["pass_open_min"]:
         return "THROUGH"
     return "GROUND"
 
@@ -277,7 +277,7 @@ def _defend(c, hq, holder_pid) -> list[Candidate]:
         out.append(hold_own_half(0.95, "def recover to own half"))
 
     high_ball = hq[0] > p["line_height"] + 0.2
-    press_allowed = not (p["early"] and high_ball)
+    press_allowed = not (p["early"] and high_ball) and hq[0] <= p.get("press_max_x", 9.0)
     second = (rank == 1 and p["press_bodies"] >= 2 and dist(me, hq) < p["second_press_dist"])
     if (rank == 0 or second) and press_allowed and def_ok(hq[0]):
         inten = p["press_intensity"] * (0.7 if p["early"] else 1.0)

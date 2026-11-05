@@ -4,7 +4,19 @@ import re
 from difflib import SequenceMatcher
 
 VOCAB = ("shoot", "attack", "defend", "press", "mark", "pass")
+# Tactic-change words -> strategy preset names (strategies.py).
+STRATEGY_WORDS = {
+    "balanced": "BALANCED", "possession": "POSSESSION", "counter": "COUNTER",
+    "highpress": "HIGH_PRESS", "lowblock": "LOW_BLOCK", "allout": "ALL_OUT",
+}
+ALIASES = {"park": "lowblock"}   # "park the bus"
+_ALL_WORDS = VOCAB + tuple(STRATEGY_WORDS) + tuple(ALIASES)
 THRESHOLD = 0.6
+
+
+def strategy_for(order) -> str | None:
+    """Strategy preset name for a tactic-change order word, else None."""
+    return STRATEGY_WORDS.get(order) if isinstance(order, str) else None
 
 _TEXT_KEYS = ("text", "message", "content", "msg", "order")
 _TEAM_KEYS = ("teamId", "team", "teamCode", "team_id", "sender", "from")
@@ -14,11 +26,14 @@ def match_order(text) -> str | None:
     """Best vocab word for any token in text, or None."""
     if not isinstance(text, str):
         return None
-    best, best_s = None, 0.0
-    for tok in re.findall(r"[a-z]+", text.lower()):
+    words = re.findall(r"[a-z]+", text.lower())
+    # adjacent pairs too, so "high press" / "low block" / "all out" match as one word
+    toks = words + [a + b for a, b in zip(words, words[1:])]
+    best, best_key = None, (0.0, 0)
+    for tok in toks:
         if len(tok) < 3:
             continue
-        for w in VOCAB:
+        for w in _ALL_WORDS:
             s = SequenceMatcher(None, tok, w).ratio()
             pre = 0
             for a, b in zip(tok, w):
@@ -26,9 +41,12 @@ def match_order(text) -> str | None:
                     break
                 pre += 1
             s += 0.1 * pre / len(w)
-            if s > best_s:
-                best, best_s = w, s
-    return best if best_s >= THRESHOLD else None
+            key = (round(s, 6), len(w))     # tie: the longer word wins ("highpress" over "press")
+            if key > best_key:
+                best, best_key = w, key
+    if best_key[0] < THRESHOLD:
+        return None
+    return ALIASES.get(best, best)
 
 
 def _team_ok(msg: dict, team_id: int) -> bool:

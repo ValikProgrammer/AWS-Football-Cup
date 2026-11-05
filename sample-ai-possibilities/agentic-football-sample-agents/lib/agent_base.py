@@ -21,6 +21,16 @@ except Exception:  # pragma: no cover
     _orders = None
     _POLICY_PARAMS = None
 
+try:  # team strategy layer: optional, the plain policy works without it
+    import strategies as _strategies
+    import shared as _shared
+    import match_memory as _memory
+    import manager as _manager
+except Exception:  # pragma: no cover
+    _strategies = _shared = _memory = _manager = None
+
+_CTX_LOGGED = False
+
 
 def llm_enabled() -> bool:
     """team_config.json enable_llm; env ENABLE_LLM=1 forces it on."""
@@ -47,6 +57,63 @@ def policy_commands(game_state: dict, team_id: int, pid: int, label: str):
         "reason": cands[0].reason,
         "top": [{"t": c.command.get("commandType"), "s": round(c.score, 3), "r": c.reason} for c in cands[:3]],
     }
+    return [cmd], extra
+
+
+def session_info(context) -> dict:
+    """session_id from the AgentCore context (defensive); context type logged once."""
+    global _CTX_LOGGED
+    out = {}
+    try:
+        sid = getattr(context, "session_id", None)
+        if sid is None and isinstance(context, dict):
+            sid = context.get("session_id") or context.get("sessionId")
+        out["session_id"] = None if sid is None else str(sid)
+        if not _CTX_LOGGED:
+            _CTX_LOGGED = True
+            out["ctx_type"] = type(context).__name__
+    except Exception:
+        pass
+    return out
+
+
+def strategy_commands(game_state: dict, team_id: int, pid: int, label: str):
+    """(commands, extra) from the policy under the team strategy. Raises on any failure.
+
+    strategy = active coach tactic order, else the shared (SSM) strategy.
+    The GK also starts the manager (background thread, never waits).
+    """
+    if _policy is None or _POLICY_PARAMS is None or _strategies is None:
+        raise RuntimeError("strategy layer unavailable")
+    _memory.update(game_state, team_id)
+    order = _orders.TRACKER.update(game_state, team_id, int(_POLICY_PARAMS.get("order_ticks", 20)))
+    coach = _orders.strategy_for(order)
+    if coach:
+        strategy, src, order = coach, "coach", None
+    else:
+        strategy = _shared.read_strategy()
+        src = "shared" if _shared.source() != "default" else "default"
+    params = _strategies.apply(_POLICY_PARAMS, strategy)
+    cands = _policy.decide(game_state, team_id, pid, label, params, order)
+    cmd = dict(cands[0].command)
+    cmd["teamId"] = team_id
+    cmd["playerId"] = pid
+    extra = {
+        "order": order,
+        "strategy": strategy,
+        "strategy_source": src,
+        "reason": cands[0].reason,
+        "top": [{"t": c.command.get("commandType"), "s": round(c.score, 3), "r": c.reason} for c in cands[:3]],
+    }
+    if label == "GK":
+        try:
+            trig = _manager.maybe_trigger(game_state, team_id, label)
+            if trig:
+                extra["manager_trigger"] = trig
+            if _manager._state.get("last_result"):
+                extra["manager_last"] = _manager._state["last_result"]
+        except Exception as e:
+            extra["manager_error"] = repr(e)[:120]
     return [cmd], extra
 
 
@@ -137,7 +204,16 @@ def create_invoke_handler(
                 game_state, team_id, effective_pid, position_label
             )
             if not llm_enabled():
-                commands, extra = policy_commands(game_state, team_id, effective_pid, position_label)
+                try:
+                    commands, extra = strategy_commands(game_state, team_id, effective_pid, position_label)
+                except Exception as se:
+                    log.warn(f"{position_label} strategy path failed, plain policy: {se!r}")
+                    commands, extra = policy_commands(game_state, team_id, effective_pid, position_label)
+                    extra["strategy_error"] = repr(se)[:200]
+                try:
+                    extra.update(session_info(context))
+                except Exception:
+                    pass
                 log_tick(position_label, team_id, effective_pid, "policy", now_ms() - t0, commands, prompt_data,
                          extra=extra)
                 yield json.dumps(commands)
